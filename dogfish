@@ -15,6 +15,7 @@ VERSION='1.2.0'
 
 DOGFISH_MYSQL_OPTS=( $DOGFISH_MYSQL_OPTS )
 DOGFISH_PG_OPTS=( $DOGFISH_PG_OPTS )
+SHELL_OPTS="shell-migrations/logs/migrations.log"
 
 set -e # Stop on error
 set -o nounset # Error on using unset vars
@@ -38,7 +39,14 @@ https://github.com/dwb/dogfish
 
 usage: dogfish migrate|rollback DB_NAME [FINISH_AT_MIGRATION]
        dogfish remigrate DB_NAME
-       dogfish create-migration [MIGRATION_NAME]
+       dogfish [options] create-migration [MIGRATION_NAME]
+
+create options:
+  -t | --migrate-template     file to use as template when creating migration
+  -d | --rollback-template    file to use as template when creating rollback
+
+  The above options can also be set with DOGFISH_MIGRATE_TEMPLATE and
+  DOGFISH_ROLLBACK_TEMPLATE environmental variables.
 
 where db_name is the name of the database in MySQL or PostgreSQL
       finish_at_migration is the (optional) number of the migration to finish
@@ -77,6 +85,14 @@ END
     "-r" | "--read-only")
       READ_ONLY="1"
       shift
+      ;;
+    "-t" | "--migrate-template")
+      DOGFISH_MIGRATE_TEMPLATE="${2}"
+      shift 2
+      ;;
+    "-d" | "--rollback-template")
+      DOGFISH_ROLLBACK_TEMPLATE="${2}"
+      shift 2
       ;;
     -*)
       die "unrecognised option '$1'"
@@ -130,6 +146,12 @@ function detect_db_type() {
     db_type=pg
     return
   fi
+
+  migrations_dir=$(find_dir_by_pattern "shell[-_]migrations")
+  if [[ ! -z $migrations_dir ]]; then
+    db_type=shell
+    return
+  fi
 }
 
 function available_migrations_to_scripts() {
@@ -141,7 +163,8 @@ function available_migrations_to_scripts() {
   #
   # Quieten shellcheck for this one, we know about it:
   # shellcheck disable=SC2012
-  ls | sed -ne "s/^${action}-\([[:digit:]]\{1,\}\)[-a-zA-Z]*\.sql$/\1 &/p"
+  #ls | sed -ne "s/^${action}-\([[:digit:]]\{1,\}\)[-a-zA-Z]*\.sql$/\1 &/p"
+  ls | sed -ne "s/^\([[:digit:]]\{1,\}\).*-${action}\.$(get_suffix)$/\1 &/p"
   popd >/dev/null
 }
 
@@ -200,6 +223,51 @@ function apply_migration_id() {
   local result=$?
   [[ $result -eq 0 ]] && inform done.
   return $result
+}
+
+function get_suffix() {
+  ${db_type}_get_suffix
+}
+
+### Shell interfaces
+
+function shell_db_exec() {
+  echo -e "--- Cannont db_exec for shell migrations."
+  return 1
+}
+
+function shell_create_schema_migrations_table() {
+  touch $SHELL_OPTS
+}
+
+function shell_db_schema_dump() {
+  echo -e "--- Cannot dump schema for shell migrations."
+  return 1
+}
+
+function shell_applied_migrations() {
+  cat $SHELL_OPTS
+  return $?
+}
+
+function shell_post_apply_sql() {
+  if [[ $action == "migrate" ]]; then
+    echo "$1" >> $SHELL_OPTS
+  else
+    sed -i.bak "/$1/d" $SHELL_OPTS
+  fi
+}
+
+function shell_apply_migration_id() {
+  sh ${migrations_dir}/$(available_migration_script_for_id "$1")
+  local result=$?
+  [[ $result -eq 0 ]] && inform done.
+  shell_post_apply_sql "$1"
+  return $result
+}
+
+function shell_get_suffix() {
+  echo "sh"
 }
 
 ### MySQL interface
@@ -270,6 +338,10 @@ END
   return $?
 }
 
+function mysql_get_suffix() {
+  echo "sql"
+}
+
 ### PostgreSQL interface
 
 function pg_db_exec() {
@@ -319,7 +391,11 @@ END
   return $?
 }
 
-### Preflight checks
+function pg_get_suffix() {
+  echo "sql"
+}
+
+### Preflight checks/
 
 if [[ -z $action ]]; then
   die "Action not given. Use one of:\n
@@ -329,16 +405,16 @@ if [[ -z $action ]]; then
   dogfish create-migration"
 fi
 
-if [[ $action == "migrate" || $action == "rollback" || $action == "remigrate" ]]; then
-  if [[ -z $db_name ]]; then
-    die "Database name not given"
-  fi
-fi
-
 if [[ -z $db_type ]]; then
   detect_db_type
 else
   migrations_dir=${db_type}_migrations
+fi
+
+if [[ $action == "migrate" || $action == "rollback" || $action == "remigrate" ]]; then
+  if [[ -z $db_name ]] && ! [[ "$db_type" ==  "shell" ]]; then
+    die "Database name not given"
+  fi
 fi
 
 if [[ -z $db_type ]]; then
@@ -380,11 +456,32 @@ function migrate() {
 }
 
 function create_migration() {
+  up_template=${1}
+  down_template=${2}
+  if [ "$db_type" == "shell" ]; then
+    suffix="sh"
+  else
+    suffix="sql"
+  fi
   date=$(date +%Y%m%d%H%M%S)
   migration_name=$(echo "${migration_name}" | tr ' ' '-')
-  upfile=${migrations_dir}/migrate-${date}-${migration_name}.sql;
-  downfile=${migrations_dir}/rollback-${date}-${migration_name}.sql;
-  touch "${upfile}" "${downfile}"
+  upfile=${migrations_dir}/${date}-${migration_name}-migrate.$(get_suffix);
+  downfile=${migrations_dir}/${date}-${migration_name}-rollback.$(get_suffix);
+
+  # add the up template
+  if [ -z "${up_template}" ]; then
+    touch "${upfile}"
+  else
+    cp "${up_template}" "${upfile}"
+  fi
+
+  # add the down template
+  if [ -z "${down_template}" ]; then
+    touch "${downfile}"
+  else
+    cp "${down_template}" "${downfile}"
+  fi
+
   echo "Created
         ${upfile}
         ${downfile}"
@@ -414,7 +511,7 @@ case $action in
     migrate "$action"
     ;;
   create-migration)
-    create_migration
+    create_migration "${DOGFISH_MIGRATE_TEMPLATE:-}" "${DOGFISH_ROLLBACK_TEMPLATE:-}"
     ;;
   dump-schema)
     if [[ -n $READ_ONLY ]]; then
