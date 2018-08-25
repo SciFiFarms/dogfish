@@ -15,7 +15,7 @@ VERSION='1.2.0'
 
 DOGFISH_MYSQL_OPTS=( $DOGFISH_MYSQL_OPTS )
 DOGFISH_PG_OPTS=( $DOGFISH_PG_OPTS )
-SHELL_OPTS="shell-migrations/logs/migrations.log"
+SHELL_OPTS="/var/lib/dogfish/migrations.log"
 
 set -e # Stop on error
 set -o nounset # Error on using unset vars
@@ -148,6 +148,12 @@ function detect_db_type() {
   fi
 
   migrations_dir=$(find_dir_by_pattern "shell[-_]migrations")
+  if [[ ! -z $migrations_dir ]]; then
+    db_type=shell
+    return
+  fi
+
+  migrations_dir=/usr/share/dogfish/shell-migrations
   if [[ ! -z $migrations_dir ]]; then
     db_type=shell
     return
