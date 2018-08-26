@@ -265,7 +265,7 @@ function shell_post_apply_sql() {
 }
 
 function shell_apply_migration_id() {
-  sh ${migrations_dir}/$(available_migration_script_for_id "$1")
+  ${migrations_dir}/$(available_migration_script_for_id "$1")
   local result=$?
   [[ $result -eq 0 ]] && inform done.
   shell_post_apply_sql "$1"
@@ -480,6 +480,7 @@ function create_migration() {
   else
     cp "${up_template}" "${upfile}"
   fi
+  chmod +x ${upfile}
 
   # add the down template
   if [ -z "${down_template}" ]; then
@@ -487,6 +488,7 @@ function create_migration() {
   else
     cp "${down_template}" "${downfile}"
   fi
+  chmod +x ${downfile}
 
   echo "Created
         ${upfile}
