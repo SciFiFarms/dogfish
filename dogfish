@@ -264,8 +264,19 @@ function shell_post_apply_sql() {
   fi
 }
 
+function shell_source_shared() {
+  # Include any shared shell functions.
+  if [ ! -v sourced ]; then
+    for file in /usr/share/dogfish/shell-migrations/shared/*; do
+      source $file
+    done
+  fi
+  sourced=true
+}
+
 function shell_apply_migration_id() {
-  ${migrations_dir}/$(available_migration_script_for_id "$1")
+  shell_source_shared
+  source ${migrations_dir}/$(available_migration_script_for_id "$1")
   local result=$?
   [[ $result -eq 0 ]] && inform done.
   shell_post_apply_sql "$1"
@@ -453,6 +464,10 @@ function migrate() {
 
   for migration_id in $(migrations_to_apply | sort ${sort_dir} | truncate_migrations_if_requested); do
     apply_migration_id "$migration_id"
+    if [ -v force_reboot ]; then
+      reboot_function
+      break
+    fi
     # Only roll back the most recent migration.
     # TODO: make rolling back number of migrations configurable
     $rolling_back && break
