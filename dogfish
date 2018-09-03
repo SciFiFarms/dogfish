@@ -227,7 +227,7 @@ function apply_migration_id() {
   fi
   ${db_type}_apply_migration_id "$@"
   local result=$?
-  [[ $result -eq 0 ]] && inform done.
+  [[ $result -eq 0 ]] && inform Done migrating "$1".
   return $result
 }
 
@@ -271,10 +271,10 @@ function shell_source_shared() {
       source $file
     done
     if [ -d /usr/share/dogfish/shell-migrations/shared/ ]; then
-    for file in /usr/share/dogfish/shell-migrations/shared/*; do
-      source $file
-    done
-  fi
+      for file in /usr/share/dogfish/shell-migrations/shared/*; do
+        source $file
+      done
+    fi
   fi
   sourced=true
 }
@@ -283,7 +283,7 @@ function shell_apply_migration_id() {
   shell_source_shared
   source ${migrations_dir}/$(available_migration_script_for_id "$1")
   local result=$?
-  [[ $result -eq 0 ]] && inform done.
+  # [[ $result -eq 0 ]] && inform done.
   shell_post_apply_sql "$1"
   return $result
 }
