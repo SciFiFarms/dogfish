@@ -27,3 +27,19 @@ function create_secret()
         -P "$(cat /run/secrets/mqtt_password)" \
         --cafile /run/secrets/ca 
 }
+
+# $1: The number of random characters to generate.
+function get_random()
+{
+    local response
+    # TODO: I think there is a programatic way to do this that would allow for 
+    # max retries annd sleep time to be passed in as parameters. 
+    until response=$(http --check-status --verify=/run/secrets/ca \
+        POST https://vault:8200/v1/sys/tools/random/$1 \
+        X-Vault-Token:$(cat /run/secrets/token))
+    do
+        echo "Can't reach Vault, sleeping." >&2
+        sleep 1
+    done;
+    echo $response
+}

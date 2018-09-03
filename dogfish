@@ -267,9 +267,14 @@ function shell_post_apply_sql() {
 function shell_source_shared() {
   # Include any shared shell functions.
   if [ ! -v sourced ]; then
+    for file in /usr/share/dogfish/shell-migrations-shared/*; do
+      source $file
+    done
+    if [ -d /usr/share/dogfish/shell-migrations/shared/ ]; then
     for file in /usr/share/dogfish/shell-migrations/shared/*; do
       source $file
     done
+  fi
   fi
   sourced=true
 }
