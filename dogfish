@@ -478,7 +478,9 @@ function migrate() {
     $rolling_back && break
   done
 
-  dump_schema
+  # TODO: This should probably be a flag that is passed in and allows for dumping schema. 
+  # I'm disabling because it doesn't make sense for shell migrations.
+  #dump_schema
 }
 
 function create_migration() {
