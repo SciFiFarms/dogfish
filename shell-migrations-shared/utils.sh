@@ -25,13 +25,18 @@ extract_from_json(){
 function create_secret()
 {
     #echo "Starting create_secret()"
-    mosquitto_pub -i dogfish_create_secret -h mqtt -p 8883 -q 2 \
+    until mosquitto_pub -i dogfish_create_secret -h mqtt -p 8883 -q 2 \
         -t portainer/secret/create/$1 \
         -m "$2" \
         -u $(cat /run/secrets/mqtt_username) \
         -P "$(cat /run/secrets/mqtt_password)" \
        --cafile /run/secrets/ca
-    #echo "Finished create_secret(${?})"
+    do
+        echo "Couldn't connect to MQTT. Sleeping."
+        sleep 5
+    done
+        
+    #echo "Finished create_secret()"
 }
 
 # $1: The number of random characters to generate.
