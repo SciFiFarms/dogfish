@@ -471,6 +471,7 @@ function migrate() {
     apply_migration_id "$migration_id"
     if [ -v force_reboot ]; then
       reboot_function
+      sleep 5
       break
     fi
     # Only roll back the most recent migration.

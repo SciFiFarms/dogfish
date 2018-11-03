@@ -2,12 +2,7 @@
 
 reboot_function()
 {
-    until vernemq ping
-    do
-        sleep 1
-    done
-    
-    sleep 2 && vernemq stop &
+    kill -s SIGTERM 1
 }
 
 # $1: The field to extract. 
