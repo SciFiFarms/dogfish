@@ -243,7 +243,11 @@ function shell_db_exec() {
 }
 
 function shell_create_schema_migrations_table() {
-  touch $SHELL_OPTS
+  # Often application entrypoints check if the folder in the volume contains anything. 
+  # Touching the log file resulted in those checks failing. Have to wait until AFTER 
+  # a migration has ran to create the migration log.
+  #touch $SHELL_OPTS
+  echo ""
 }
 
 function shell_db_schema_dump() {
@@ -252,8 +256,8 @@ function shell_db_schema_dump() {
 }
 
 function shell_applied_migrations() {
-  cat $SHELL_OPTS
-  return $?
+  cat $SHELL_OPTS 2> /dev/null
+  return 0
 }
 
 function shell_post_apply_sql() {
@@ -504,6 +508,8 @@ function create_migration() {
     cp "${up_template}" "${upfile}"
   fi
   chmod +x ${upfile}
+  # We chmod 777 so that anyone can read & write. The owner will get fixed once the file is uploaded to git.
+  chmod 777 ${upfile}
 
   # add the down template
   if [ -z "${down_template}" ]; then
@@ -512,6 +518,7 @@ function create_migration() {
     cp "${down_template}" "${downfile}"
   fi
   chmod +x ${downfile}
+  chmod 777 ${downfile}
 
   echo "Created
         ${upfile}
